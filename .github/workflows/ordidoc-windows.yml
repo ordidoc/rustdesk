@@ -321,12 +321,30 @@ jobs:
           name: rustdesk-unsigned-windows-${{ matrix.job.arch }}
           path: rustdesk
 
-      - name: Sign rustdesk files
-        if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != '-2'
-        shell: bash
+      - name: Signer le programme et ses DLL
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         run: |
-          pip3 install requests argparse
-          BASE_URL=${{ env.SIGN_BASE_URL }} SECRET_KEY=${{ secrets.SIGN_SECRET_KEY }} python3 res/job.py sign_files ./rustdesk/
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:AZURE_CLIENT_SECRET) { throw 'Secrets Azure absents du depot : signature impossible.' }
+          if (-not (Get-Command sign -ErrorAction SilentlyContinue)) {
+            dotnet tool install --global sign --version 1.1.5
+            if ($LASTEXITCODE -ne 0) { throw 'Installation de l outil sign echouee.' }
+          }
+          $files = Get-ChildItem './rustdesk' -Recurse -File |
+            Where-Object { $_.Extension -in '.exe', '.dll' -and $_.FullName -notmatch 'RustDeskPrinterDriver|usbmmidd_v2' }
+          if (-not $files) { throw 'Aucun fichier a signer dans ./rustdesk.' }
+          foreach ($file in $files) {
+            sign code artifact-signing $file.FullName -asa ordidoc-signing -ascp ordidoc-public-trust -ase https://neu.codesigning.azure.net/ -v warning
+            if ($LASTEXITCODE -ne 0) { throw "Signature echouee : $($file.FullName)" }
+            $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
+            if ($signature.Status -ne 'Valid') { throw "Signature invalide : $($file.FullName) ($($signature.Status))" }
+            if ($signature.SignerCertificate.Subject -notmatch 'ORDiDOC') { throw "Signataire inattendu : $($signature.SignerCertificate.Subject)" }
+            Write-Host "signe : $($file.Name)"
+          }
 
       - name: Verify Windows Flutter version
         if: env.UPLOAD_ARTIFACT == 'true' && env.PUBLISH_UPDATE_METADATA == 'true'
@@ -340,37 +358,6 @@ jobs:
             throw "RustDesk reports version '$reportedVersion', expected '$env:VERSION'"
           }
 
-      - name: Verify template payload signatures
-        if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != '-2'
-        shell: powershell
-        run: |
-          Get-ChildItem ./rustdesk -Recurse -File -ErrorAction Stop |
-            Where-Object { $_.Extension -eq '.exe' -or ($_.Extension -eq '.dll' -and $_.FullName -notmatch 'RustDeskPrinterDriver|usbmmidd_v2') } |
-            ForEach-Object {
-              $signature = Get-AuthenticodeSignature -LiteralPath $_.FullName -ErrorAction Stop
-              if ($signature.Status -ne 'Valid') { throw "Invalid template payload signature: $($_.FullName) ($($signature.Status))" }
-            }
-
-      - name: Build template packer
-        if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != '-2'
-        shell: bash
-        run: |
-          sed -i '/dpiAware/d' res/manifest.xml
-          pushd ./libs/portable
-          pip3 install -r requirements.txt
-          python3 ./generate.py -f ../../rustdesk/ -e rustdesk.exe -l 11 -t "${{ matrix.job.target }}" --exclude-exe
-          popd
-          mkdir -p ./packer-template
-          cp ./target/${{ matrix.job.target }}/release/rustdesk-portable-packer.exe ./packer-template/rustdesk-template-${{ matrix.job.arch }}.exe
-
-      - name: Upload unsigned template packer
-        if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != '-2'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: rustdesk-unsigned-packer-template-${{ matrix.job.arch }}
-          path: ./packer-template
-          if-no-files-found: error
-
       - name: Build self-extracted executable
         shell: bash
         if: env.UPLOAD_ARTIFACT == 'true'
@@ -383,11 +370,30 @@ jobs:
           mkdir -p ./SignOutput
           mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/ordidoc-assistance-${{ env.VERSION }}-${{ matrix.job.arch }}.exe
 
-      - name: Sign rustdesk self-extracted file
-        if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != '-2'
-        shell: bash
+      - name: Signer l'executable auto-extractible
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         run: |
-          BASE_URL=${{ env.SIGN_BASE_URL }} SECRET_KEY=${{ secrets.SIGN_SECRET_KEY }} python3 res/job.py sign_files ./SignOutput
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:AZURE_CLIENT_SECRET) { throw 'Secrets Azure absents du depot : signature impossible.' }
+          if (-not (Get-Command sign -ErrorAction SilentlyContinue)) {
+            dotnet tool install --global sign --version 1.1.5
+            if ($LASTEXITCODE -ne 0) { throw 'Installation de l outil sign echouee.' }
+          }
+          $files = Get-ChildItem './SignOutput' -Recurse -File |
+            Where-Object { $_.Extension -in '.exe', '.dll' -and $_.FullName -notmatch 'RustDeskPrinterDriver|usbmmidd_v2' }
+          if (-not $files) { throw 'Aucun fichier a signer dans ./SignOutput.' }
+          foreach ($file in $files) {
+            sign code artifact-signing $file.FullName -asa ordidoc-signing -ascp ordidoc-public-trust -ase https://neu.codesigning.azure.net/ -v warning
+            if ($LASTEXITCODE -ne 0) { throw "Signature echouee : $($file.FullName)" }
+            $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
+            if ($signature.Status -ne 'Valid') { throw "Signature invalide : $($file.FullName) ($($signature.Status))" }
+            if ($signature.SignerCertificate.Subject -notmatch 'ORDiDOC') { throw "Signataire inattendu : $($signature.SignerCertificate.Subject)" }
+            Write-Host "signe : $($file.Name)"
+          }
 
       - name: Upload signed Windows Flutter EXE
         if: env.UPLOAD_ARTIFACT == 'true' && env.PUBLISH_UPDATE_METADATA == 'true' && env.SIGN_BASE_URL != '-2'
@@ -405,7 +411,7 @@ jobs:
           path: ./SignOutput/ordidoc-assistance-${{ env.VERSION }}-${{ matrix.job.arch }}.msi
           if-no-files-found: error
 
-      - name: Upload ORDiDOC Assistance (non signe)
+      - name: Upload ORDiDOC Assistance (signe)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ordidoc-assistance-windows-x64
