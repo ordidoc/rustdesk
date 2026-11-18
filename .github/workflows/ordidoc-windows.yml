@@ -343,7 +343,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           if (-not $env:AZURE_CLIENT_SECRET) { throw 'Secrets Azure absents du depot : signature impossible.' }
           if (-not (Get-Command sign -ErrorAction SilentlyContinue)) {
-            dotnet tool install --global sign --version 1.1.5
+            dotnet tool install --global sign --version 0.9.1-beta.26552.4
             if ($LASTEXITCODE -ne 0) { throw 'Installation de l outil sign echouee.' }
           }
           $files = Get-ChildItem './rustdesk' -Recurse -File |
@@ -392,7 +392,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           if (-not $env:AZURE_CLIENT_SECRET) { throw 'Secrets Azure absents du depot : signature impossible.' }
           if (-not (Get-Command sign -ErrorAction SilentlyContinue)) {
-            dotnet tool install --global sign --version 1.1.5
+            dotnet tool install --global sign --version 0.9.1-beta.26552.4
             if ($LASTEXITCODE -ne 0) { throw 'Installation de l outil sign echouee.' }
           }
           $files = Get-ChildItem './SignOutput' -Recurse -File |
