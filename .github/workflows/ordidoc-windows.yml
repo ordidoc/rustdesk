@@ -72,12 +72,15 @@ jobs:
       target_version: Windows10
 
   build-for-windows-flutter:
-    name: ${{ matrix.job.target }}
+    name: ${{ matrix.variante.nom }}
     needs: [build-RustDeskTempTopMostWindow, generate-bridge]
     runs-on: ${{ matrix.job.os }}
     strategy:
       fail-fast: false
       matrix:
+        variante:
+          - { id: assistance, nom: "ORDiDOC Assistance", fichier: ordidoc-assistance, env: "" }
+          - { id: sos, nom: "SOS ORDiDOC", fichier: sos-ordidoc, env: sos }
         job:
           # - { target: i686-pc-windows-msvc        , os: windows-2022                  }
           # - { target: x86_64-pc-windows-gnu       , os: windows-2022                  }
@@ -89,6 +92,8 @@ jobs:
               vcpkg-triplet: x64-windows-static,
               build-args: "--vram",
             }
+    env:
+      ORDIDOC_VARIANT: ${{ matrix.variante.env }}
     steps:
       - name: Export GitHub Actions cache environment variables
         uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
@@ -239,6 +244,13 @@ jobs:
         shell: bash
         run: echo "SODIUM_LIB_DIR=$VCPKG_ROOT/installed/${{ matrix.job.vcpkg-triplet }}/lib" >> "$GITHUB_ENV"
 
+      - name: Nom Windows de la variante
+        if: ${{ matrix.variante.id != 'assistance' }}
+        shell: bash
+        run: |
+          sed -i 's/ORDiDOC Assistance/${{ matrix.variante.nom }}/g' Cargo.toml libs/portable/Cargo.toml flutter/windows/runner/Runner.rc
+          grep -c '${{ matrix.variante.nom }}' Cargo.toml libs/portable/Cargo.toml flutter/windows/runner/Runner.rc
+
       - name: Build rustdesk
         run: |
           # Windows: build RustDesk
@@ -318,7 +330,7 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: rustdesk-unsigned-windows-${{ matrix.job.arch }}
+          name: rustdesk-unsigned-windows-${{ matrix.job.arch }}-${{ matrix.variante.id }}
           path: rustdesk
 
       - name: Signer le programme et ses DLL
@@ -368,7 +380,7 @@ jobs:
           python3 ./generate.py -f ../../rustdesk/ -o . -e ../../rustdesk/rustdesk.exe
           popd
           mkdir -p ./SignOutput
-          mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/ordidoc-assistance-${{ env.VERSION }}-${{ matrix.job.arch }}.exe
+          mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/${{ matrix.variante.fichier }}-${{ env.VERSION }}-${{ matrix.job.arch }}.exe
 
       - name: Signer l'executable auto-extractible
         shell: pwsh
@@ -400,7 +412,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-flutter-${{ matrix.job.arch }}-exe
-          path: ./SignOutput/ordidoc-assistance-${{ env.VERSION }}-${{ matrix.job.arch }}.exe
+          path: ./SignOutput/${{ matrix.variante.fichier }}-${{ env.VERSION }}-${{ matrix.job.arch }}.exe
           if-no-files-found: error
 
       - name: Upload signed Windows Flutter MSI
@@ -408,12 +420,12 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-flutter-${{ matrix.job.arch }}-msi
-          path: ./SignOutput/ordidoc-assistance-${{ env.VERSION }}-${{ matrix.job.arch }}.msi
+          path: ./SignOutput/${{ matrix.variante.fichier }}-${{ env.VERSION }}-${{ matrix.job.arch }}.msi
           if-no-files-found: error
 
       - name: Upload ORDiDOC Assistance (signe)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ordidoc-assistance-windows-x64
+          name: ${{ matrix.variante.fichier }}-windows-x64
           path: ./SignOutput
           if-no-files-found: error
