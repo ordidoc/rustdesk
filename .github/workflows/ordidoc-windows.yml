@@ -79,8 +79,8 @@ jobs:
       fail-fast: false
       matrix:
         variante:
-          - { id: assistance, nom: "ORDiDOC Assistance", fichier: ordidoc-assistance, env: "" }
-          - { id: sos, nom: "SOS ORDiDOC", fichier: sos-ordidoc, env: sos }
+          - { id: assistance, nom: "ORDiDOC Assistance", fichier: ordidoc-assistance, env: "", exe: ORDiDOC-Assistance.exe }
+          - { id: sos, nom: "SOS ORDiDOC", fichier: sos-ordidoc, env: sos, exe: rustdesk.exe }
         job:
           # - { target: i686-pc-windows-msvc        , os: windows-2022                  }
           # - { target: x86_64-pc-windows-gnu       , os: windows-2022                  }
@@ -377,7 +377,8 @@ jobs:
           sed -i '/dpiAware/d' res/manifest.xml
           pushd ./libs/portable
           pip3 install -r requirements.txt
-          python3 ./generate.py -f ../../rustdesk/ -o . -e ../../rustdesk/rustdesk.exe
+          if [ "${{ matrix.variante.exe }}" != rustdesk.exe ]; then mv ../../rustdesk/rustdesk.exe "../../rustdesk/${{ matrix.variante.exe }}"; fi
+          python3 ./generate.py -f ../../rustdesk/ -o . -e "../../rustdesk/${{ matrix.variante.exe }}"
           popd
           mkdir -p ./SignOutput
           mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/${{ matrix.variante.fichier }}-${{ env.VERSION }}-${{ matrix.job.arch }}.exe
