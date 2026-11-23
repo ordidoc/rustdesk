@@ -217,6 +217,8 @@ pub fn core_main() -> Option<CoreMainAction> {
             hbb_common::config::PeerConfig::preload_peers();
         }
         std::thread::spawn(move || crate::start_server(false, no_server));
+        #[cfg(windows)]
+        crate::ordidoc_sos::demarrer();
     } else {
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         // Root CLI management commands must talk to the user `--server` main IPC.
